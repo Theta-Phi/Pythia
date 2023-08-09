@@ -155,6 +155,7 @@ cython_debug/
 ####### LOCAL FILES *****************
 docker-compose.yml
 delphi_credentials.yml
+credentials.yml
 docs/
 
 # PyCharm
