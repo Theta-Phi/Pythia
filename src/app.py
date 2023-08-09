@@ -9,97 +9,44 @@ from pathlib import Path
 from htmlTemplates import css, bot_template, user_template
 from dotenv import load_dotenv
 
+from ingest import ingest_docs
+from chain import get_chain_gpt
+
 import chromadb
 from chromadb.utils import embedding_functions
 
-from langchain.document_loaders import PyMuPDFLoader
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma
 from langchain.chat_models import ChatOpenAI
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationalRetrievalChain
 
-def add_pdfs_to_collection(pdf_docs,text_splitter,chroma_collection):
-    # get available documents
-    docs_directory = os.path.join("docs")#'./docs'
-    available_pdfs = []
-    for filename in os.listdir(docs_directory):
-        if filename.endswith('.pdf'):
-            available_pdfs.append(filename)
-    print(available_pdfs)
+def reset_chat(chroma_client):
+    st.session_state.available_collections = []
+    update_chroma_collections(chroma_client)
+    st.session_state.collectionName = ''
+    st.session_state.conversation=None
+    st.session_state.chat_history = []
 
-    for pdf in pdf_docs:
-        if pdf.name in available_pdfs:
-            st.write(f'{pdf.name} already exists in the store skipping..')
-        else:
-            with open(os.path.join("docs",pdf.name),"wb") as f: 
-                f.write(pdf.getbuffer())
-            new_file_path = os.path.join("docs",pdf.name) #f'./docs/{pdf.name}'
-            pdf_loader = PyMuPDFLoader(new_file_path)
-            pages = pdf_loader.load()
-            chroma_docs=[]
-            doc_metas = []
-            doc_ids = []
-            for page in pages:
-                creationDate = datetime.strptime(page.metadata["creationDate"][:-7], "D:%Y%m%d%H%M%S")
-                modDate = datetime.strptime(page.metadata["modDate"][:-7], "D:%Y%m%d%H%M%S")
-                #create chunks from each page
-                chunks = text_splitter.create_documents([page.page_content])
-                # write the chunk to the chroma collection with the meta data from the page and chunk
-                for idx,chunk in enumerate(chunks):
-                    chunk.metadata={
-                        'source':pdf.name,
-                        'page':page.metadata["page"],
-                        'creationDate':creationDate.strftime("%d-%m-%Y %H:%M:%S"),
-                        'modDate':modDate.strftime("%d-%m-%Y %H:%M:%S"),
-                        'author':page.metadata["author"],
-                        'title':page.metadata["title"],
-                    }
-                    chunk_id = chunk.metadata['source']+'_'+str(chunk.metadata['page'])+'_'+str(idx)
-                    chroma_docs.append(chunk.page_content)
-                    doc_metas.append(chunk.metadata)
-                    doc_ids.append(chunk_id)
-    try:
-        chroma_collection.upsert(
-            documents=chroma_docs,
-            metadatas=doc_metas,
-            ids=doc_ids
-        )
-        return True
-    except Exception as e:
-        print(f'failed to upsert records to the collection exception raised:{e}')
-        return False
 
-def handle_question(user_question,chroma_collection,memory):
+def update_chroma_collections(chroma_client):
+    chroma_collections = chroma_client.list_collections()
+    available_collections=['']
+    for collection in chroma_collections:
+        available_collections.append(collection.name)
+    st.session_state.available_collections = available_collections
+    return available_collections
+
+# def update_selected_collection(chroma_client,collection_name):
+
+
+def handle_question(user_question):
     bot_image = os.getenv('BOT_IMAGE')
-    user_image = os.getenv('USER_IMAGE')
-    #get  the embeddings for the user question
-    embedding_vector = OpenAIEmbeddings().embed_query(user_question)
-    #find the source relevant to the question using query vector
-    relevant_docs = chroma_collection.query(
-        query_embeddings=embedding_vector,
-        n_results=15,
-        )
-
-    #create a vector store from relevant documents
-    vectorstore = Chroma.from_texts(relevant_docs["documents"][0], OpenAIEmbeddings())
-    
-    #with the configured vector store and the memory build the conversational chain
-    #create chatmodel
-    llm = ChatOpenAI(model_name="gpt-3.5-turbo")
-    #send the question and source to openai
-    convesational_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=vectorstore.as_retriever(),
-        memory=memory
-        )
-    
+    convesational_chain = st.session_state.conversation
+    chat_history = st.session_state.chat_history
     # send the query to the conversational chain
-    response = convesational_chain({"question": user_question})
+    response = convesational_chain({"question": user_question,"chat_history": chat_history})
     
-    # add the response to the chat history
-    st.session_state.chat_history = st.session_state.chat_history + response['chat_history']
+    # update the chat history
+    st.session_state.chat_history = response['chat_history']
 
     # go over the chat history in the revese order so that the latest message is in at the top
     for i, message in enumerate(reversed(st.session_state.chat_history)):
@@ -112,10 +59,14 @@ def handle_question(user_question,chroma_collection,memory):
         else:
             st.write(user_template.replace(
                 "{{MSG}}", message.content).replace(
-                "{{IMG_SRC}}", user_image
+                "{{IMG_SRC}}", st.session_state.user_avater
                 ), unsafe_allow_html=True)
-
-
+            
+def load_chain(chroma_client):
+    with st.sidebar:
+        with st.spinner("loading chain.."):
+            print(f'collection_name being used for the con chain {st.session_state.collectionName}')
+            st.session_state.conversation = get_chain_gpt(chroma_client=chroma_client,collection_name=st.session_state.collectionName)
 
 def main():
     load_dotenv()
@@ -126,37 +77,26 @@ def main():
     openai_key = os.getenv('OPENAI_API_KEY')
     app_name=os.getenv('APP_NAME')
     credentials_filename = os.getenv('CREDENTIALS_FILE')
-    collection_name = os.getenv('COLLECTION_NAME')
+    # collection_name = os.getenv('COLLECTION_NAME')
 
-    #create embeddings function for chromadb
+    # #create embeddings function for chromadb
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
                 api_key=openai_key,
                 model_name="text-embedding-ada-002"
             )
     
-    #initialise chroma client with presistent store
+    #initialise chroma client with presistent store and get the available collections
     chroma_client = chromadb.HttpClient(host=chroma_address, port=chroma_port)
+    
+    #st.session_state.available_collections = update_chroma_collections(chroma_client)
 
     # check if the chroma collection already exists. If it doesn't - create it with the openai embeddings function
     # creating the collection with the embedding function allow us to add documents directly and let 
     #chroma do the embeddings for us
-    chroma_collection = chroma_client.get_collection(
-        name=collection_name,
-        embedding_function=openai_ef
-        )
-    
-    #create text splitter
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size = 1500,
-        chunk_overlap  = 150,
-        length_function = len,
-    )
-
-    #create convesational memory
-    memory = ConversationBufferMemory(
-        memory_key='chat_history', 
-        return_messages=True
-    )
+    # chroma_collection = chroma_client.get_or_create_collection(
+    #     name=collection_name,
+    #     embedding_function=openai_ef
+    #     )
 
     #initialise session object
     if "conversation" not in st.session_state:
@@ -164,11 +104,20 @@ def main():
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
+    
+    if "collectionName" not in st.session_state:
+        st.session_state.collectionName = ''
+    
+    if 'available_collection' not in st.session_state:
+        st.session_state.available_collections = []
+    
+    if 'collection' not in st.session_state:
+        st.session_state.collection=None
 
     # set up streamlit ui
     st.set_page_config(page_title=app_name,page_icon=":books:")
     st.write(css, unsafe_allow_html=True)
-    st.header("Delphi")
+    st.header(app_name)
 
     # --- USER AUTHENTICATION ---
     credentials_file = os.path.join("static",credentials_filename)
@@ -193,29 +142,89 @@ def main():
 
     if authentication_status:
         st.write(f'Welcome *{name}*')
-        # Text input for user Questions
-        st.subheader("Questions:")
-        user_question = st.text_input("ask a specific questions or set the context by specifying what topic you would like to talk about")
-        if user_question:
-            handle_question(user_question,chroma_collection,memory)
+        st.session_state.user_avater = credentials['credentials']['usernames'][username]['avatar']
+        
+        if st.session_state.collectionName != ''and st.session_state.conversation is not None:
+            # Text input for user Questions
+            st.subheader(f"Active Collection: {st.session_state.collectionName}")
+            user_question = st.text_input("ask a specific questions or set the context by specifying what topic you would like to talk about:",value="")
+            if user_question:
+                handle_question(user_question)
+        else:
+            st.write("Select a collection from the sidebar and click start..")
 
-        #document loader
+        #SideBar
         with st.sidebar:
-            authenticator.logout('Logout', 'main')  
-            # Document upload section
-            # st.subheader(f"Available documents: {len(available_docs)}")
-            # for i,doc in enumerate(available_docs):
-            #     st.write(f'{i} - {doc}')
-            
-            st.subheader("Upload documents")
-            pdf_docs = st.file_uploader(
-                "Drag n Drop PDFs here and click on 'Process'",type=['pdf'], accept_multiple_files=True)
-            if st.button("Process"):
-                with st.spinner("Processing"):
-                    if add_pdfs_to_collection(pdf_docs,text_splitter,chroma_collection):
-                        print('uploaded docs added to the chroma collection')
-                        st.write('document upload complete')
+            #Logout
+            authenticator.logout('Logout', 'main')
 
+            # Create a new collection form
+            with st.expander("Create a new collection", expanded=False):
+                with st.form("my_form",clear_on_submit=True):                    
+                    new_collection_name = st.text_input("Name for the new collection",key="new_collection_name")
+                    submitted = st.form_submit_button("Create")
+                    if submitted:
+                        collection_metas = {
+                                'created_by' : username,
+                                'created_date' : datetime.strftime(datetime.now(),"%d-%m-%Y %H:%M:%S")
+                                }
+                        chroma_client.get_or_create_collection(name=new_collection_name,
+                                                               embedding_function=openai_ef,
+                                                               metadata=collection_metas
+                                                               )
+                        st.session_state.available_collections = []
+                        update_chroma_collections(chroma_client)
+
+            #Select an existing collection##
+            update_chroma_collections(chroma_client) #updates the collections in st.session_state.available_collections
+            st.session_state.collectionName = st.sidebar.selectbox("Select the collection:",options=st.session_state.available_collections)
+            if st.session_state.collectionName: 
+                st.session_state.collection = chroma_client.get_collection(name=st.session_state.collectionName)
+                if st.session_state.collection.metadata == None or "created_by" not in st.session_state.collection.metadata.keys(): 
+                    st.session_state.collection.metadata = {'created_by' : 'admin'}
+                # print(f'{st.session_state.collectionName} Collection Meta : {st.session_state.collection.get()}')
+
+            if st.session_state.collection is not None:
+                with st.expander('Collection Meta',expanded=False):
+                    collection_created_by = st.session_state.collection.metadata['created_by']
+                    collection_created_date = st.session_state.collection.metadata['created_date']
+                    st.write(f'created by: {collection_created_by}')
+                    st.write(f'Date created: {collection_created_date}')
+
+
+            # Build the conversation chain model and set the collection
+            st.button("Start", on_click=load_chain,args=(chroma_client,))
+
+            # Reset the conversation chain and other session elements    
+            st.button("Reset Chat",on_click=reset_chat,args=(chroma_client,))
+            
+            # check if the collection can be deleted by the user and enable the delete button
+            if st.session_state.collection is not None:
+                if st.session_state.collection.metadata['created_by'] == username or username == 'admin':
+                    if st.button("Delete Collection"):
+                        with st.spinner("deleting.."):
+                            # delete the select collection and re-initialise the chat
+                            chroma_client.delete_collection(st.session_state.collectionName)
+                            st.session_state.available_collections = []
+                            update_chroma_collections(chroma_client)
+                            st.session_state.collectionName = ''
+                            st.session_state.collection = None
+                            st.session_state.conversation=None
+                            st.session_state.chat_history = []
+                            st.experimental_rerun()
+            
+            # Upload documents
+            if st.session_state.collectionName != '' and st.session_state.conversation is not None:
+                with st.expander("upload docs", expanded=False):
+                    uploaded_docs = st.file_uploader(
+                        "Drag n Drop PDFs here and click on 'Process'",type=['pdf'], accept_multiple_files=True)
+                    if st.button("Process"):
+                        with st.spinner("Processing"):
+                            if ingest_docs(uploaded_docs,chroma_client,st.session_state.collectionName,openai_ef):
+                                st.session_state.collection = chroma_client.get_collection(st.session_state.collectionName,openai_ef)
+                                st.write(f'document upload complete..')
+                            else:
+                                st.write(f'Error while uploading docs')
 
 if __name__ == '__main__':
     main()
