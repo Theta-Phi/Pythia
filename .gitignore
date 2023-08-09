@@ -156,6 +156,7 @@ cython_debug/
 docker-compose.yml
 delphi_credentials.yml
 /static/credentials.yml
+credentials copy.yml
 app_old.py
 docs/
 
