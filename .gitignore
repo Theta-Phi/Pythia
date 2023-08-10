@@ -157,8 +157,10 @@ docker-compose.yml
 delphi_credentials.yml
 /static/credentials.yml
 credentials copy.yml
+creds.yml
 app_old.py
 docs/
+unhashed_creds.txt
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

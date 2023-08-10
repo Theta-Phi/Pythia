@@ -1,11 +1,9 @@
-import os
+import os, shutil
 from datetime import datetime
 import streamlit as st
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
-import pickle
-from pathlib import Path
 from htmlTemplates import css, bot_template, user_template
 from dotenv import load_dotenv
 
@@ -14,10 +12,6 @@ from chain import get_chain_gpt
 
 import chromadb
 from chromadb.utils import embedding_functions
-
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.chat_models import ChatOpenAI
 
 def reset_chat(chroma_client):
     st.session_state.available_collections = []
@@ -35,7 +29,17 @@ def update_chroma_collections(chroma_client):
     st.session_state.available_collections = available_collections
     return available_collections
 
-# def update_selected_collection(chroma_client,collection_name):
+def delete_collection(chroma_client,collectionName):
+    try:
+        collection_doc_dir = os.path.join('docs',collectionName)
+        chroma_client.delete_collection(collectionName)
+        # deleted the stored documents:
+        if os.path.exists(collection_doc_dir):
+            shutil.rmtree(collection_doc_dir)
+        return True
+    except Exception as e:
+        print(f'error while trying to deleted collection {collectionName} Exception: {e}')
+        return False
 
 
 def handle_question(user_question):
@@ -142,7 +146,8 @@ def main():
 
     if authentication_status:
         st.write(f'Welcome *{name}*')
-        st.session_state.user_avater = credentials['credentials']['usernames'][username]['avatar']
+        st.session_state.user_avater = "https://e7.pngegg.com/pngimages/799/987/png-clipart-computer-icons-avatar-icon-design-avatar-heroes-computer-wallpaper-thumbnail.png"
+        #st.session_state.user_avater = credentials['credentials']['usernames'][username]['avatar']
         
         if st.session_state.collectionName != ''and st.session_state.conversation is not None:
             # Text input for user Questions
@@ -203,15 +208,11 @@ def main():
                 if st.session_state.collection.metadata['created_by'] == username or username == 'admin':
                     if st.button("Delete Collection"):
                         with st.spinner("deleting.."):
-                            # delete the select collection and re-initialise the chat
-                            chroma_client.delete_collection(st.session_state.collectionName)
-                            st.session_state.available_collections = []
-                            update_chroma_collections(chroma_client)
-                            st.session_state.collectionName = ''
-                            st.session_state.collection = None
-                            st.session_state.conversation=None
-                            st.session_state.chat_history = []
-                            st.experimental_rerun()
+                            if delete_collection(chroma_client,st.session_state.collectionName):
+                                reset_chat(chroma_client)
+                                st.write(f'collection deleted')
+                            else:
+                                st.write(f'Error while trying to delete collection')
             
             # Upload documents
             if st.session_state.collectionName != '' and st.session_state.conversation is not None:

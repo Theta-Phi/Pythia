@@ -21,11 +21,11 @@ def add_pdf_to_collection(pdf,text_splitter,chroma_collection,docs_folder):
         try:
             creationDate = datetime.strptime(page.metadata["creationDate"][:-7], "D:%Y%m%d%H%M%S")
         except:
-            creationDate = datetime.strptime("20230908000000", "D:%Y%m%d%H%M%S")
+            creationDate = datetime.strptime("20230101000000", "%Y%m%d%H%M%S")
         try:
             modDate = datetime.strptime(page.metadata["modDate"][:-7], "D:%Y%m%d%H%M%S")
         except:
-            modDate = datetime.strptime("20230908000000", "D:%Y%m%d%H%M%S")
+            modDate = datetime.strptime("20230101000000", "%Y%m%d%H%M%S")
         #create chunks from each page
         chunks = text_splitter.create_documents([page.page_content])
         # write the chunk to the chroma collection with the meta data from the page and chunk
@@ -64,7 +64,7 @@ def ingest_docs(uploaded_docs,chroma_client,collection_name,embedding_func):
     )
 
     # get list available documnents
-    docs_directory = os.path.join("docs",st.session_state.collectionName)#'./docs'
+    docs_directory = os.path.join("docs",st.session_state.collectionName)
     if not os.path.exists(docs_directory): os.makedirs(docs_directory)
     availablae_docs = []
     for filename in os.listdir(docs_directory):

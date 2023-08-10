@@ -19,7 +19,6 @@ services:
           - CHROMA_PORT=
           - APP_NAME=
           - CREDENTIALS_FILE=
-          - COLLECTION_NAME=
           - BOT_IMAGE=https://i.pinimg.com/originals/02/c5/a8/02c5a82909a225411008d772ee6b7d62.png
 networks:
   chroma_net:
