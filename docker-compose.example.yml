@@ -1,6 +1,5 @@
 version: "3"
 
-# Services
 services:
     delphi:
         image: delphi:1.1.0
