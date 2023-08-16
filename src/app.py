@@ -75,7 +75,6 @@ def handle_question(user_question):
 def load_chain(chroma_client):
     with st.sidebar:
         with st.spinner("loading chain.."):
-            print(f'collection_name being used for the con chain {st.session_state.collectionName}')
             st.session_state.conversation = get_chain_gpt(chroma_client=chroma_client,collection_name=st.session_state.collectionName)
             logger.info(f'new conversation chain with chroma collection {st.session_state.collectionName} started by {st.session_state.username}')
 
@@ -187,7 +186,6 @@ def main():
                 st.session_state.collection = chroma_client.get_collection(name=st.session_state.collectionName)
                 if st.session_state.collection.metadata == None or "created_by" not in st.session_state.collection.metadata.keys(): 
                     st.session_state.collection.metadata = {'created_by' : 'admin'}
-                # print(f'{st.session_state.collectionName} Collection Meta : {st.session_state.collection.get()}')
 
             # Show the selected collection meta in a expander
             if st.session_state.collection is not None:
