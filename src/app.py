@@ -13,12 +13,15 @@ from chain import get_chain_gpt
 import chromadb
 from chromadb.utils import embedding_functions
 
+from logger import logger
+
 def reset_chat(chroma_client):
     st.session_state.available_collections = []
     update_chroma_collections(chroma_client)
     st.session_state.collectionName = ''
     st.session_state.conversation=None
     st.session_state.chat_history = []
+    logger.info(f'chat reset')
 
 
 def update_chroma_collections(chroma_client):
@@ -27,18 +30,21 @@ def update_chroma_collections(chroma_client):
     for collection in chroma_collections:
         available_collections.append(collection.name)
     st.session_state.available_collections = available_collections
+    logger.info(f'Chroma collection updated')
     return available_collections
 
 def delete_collection(chroma_client,collectionName):
     try:
         collection_doc_dir = os.path.join('docs',collectionName)
         chroma_client.delete_collection(collectionName)
+        logger.info(f'Chroma Collection : {collectionName} deleted by user: {st.session_state.username}')
         # deleted the stored documents:
         if os.path.exists(collection_doc_dir):
             shutil.rmtree(collection_doc_dir)
+            logger.info(f'Document Collection at : {collection_doc_dir} deleted by user: {st.session_state.username}')
         return True
     except Exception as e:
-        print(f'error while trying to deleted collection {collectionName} Exception: {e}')
+        logger.error(f'error while trying to deleted collection {collectionName} Exception: {e}')
         return False
 
 
@@ -71,6 +77,7 @@ def load_chain(chroma_client):
         with st.spinner("loading chain.."):
             print(f'collection_name being used for the con chain {st.session_state.collectionName}')
             st.session_state.conversation = get_chain_gpt(chroma_client=chroma_client,collection_name=st.session_state.collectionName)
+            logger.info(f'new conversation chain with chroma collection {st.session_state.collectionName} started by {st.session_state.username}')
 
 def main():
     load_dotenv()
@@ -91,16 +98,6 @@ def main():
     
     #initialise chroma client with presistent store and get the available collections
     chroma_client = chromadb.HttpClient(host=chroma_address, port=chroma_port)
-    
-    #st.session_state.available_collections = update_chroma_collections(chroma_client)
-
-    # check if the chroma collection already exists. If it doesn't - create it with the openai embeddings function
-    # creating the collection with the embedding function allow us to add documents directly and let 
-    #chroma do the embeddings for us
-    # chroma_collection = chroma_client.get_or_create_collection(
-    #     name=collection_name,
-    #     embedding_function=openai_ef
-    #     )
 
     #initialise session object
     if "conversation" not in st.session_state:
@@ -146,8 +143,10 @@ def main():
 
     if authentication_status:
         st.write(f'Welcome *{name}*')
+        st.session_state.username = username
         st.session_state.user_avater = "https://e7.pngegg.com/pngimages/799/987/png-clipart-computer-icons-avatar-icon-design-avatar-heroes-computer-wallpaper-thumbnail.png"
         #st.session_state.user_avater = credentials['credentials']['usernames'][username]['avatar']
+        logger.info(f'new log in: {st.session_state.username}')
         
         if st.session_state.collectionName != ''and st.session_state.conversation is not None:
             # Text input for user Questions
@@ -177,6 +176,7 @@ def main():
                                                                embedding_function=openai_ef,
                                                                metadata=collection_metas
                                                                )
+                        logger.info(f'new collection created by {st.session_state.username} - collection: {new_collection_name}')
                         st.session_state.available_collections = []
                         update_chroma_collections(chroma_client)
 
@@ -189,6 +189,7 @@ def main():
                     st.session_state.collection.metadata = {'created_by' : 'admin'}
                 # print(f'{st.session_state.collectionName} Collection Meta : {st.session_state.collection.get()}')
 
+            # Show the selected collection meta in a expander
             if st.session_state.collection is not None:
                 with st.expander('Collection Meta',expanded=False):
                     collection_created_by = st.session_state.collection.metadata['created_by']
@@ -224,8 +225,10 @@ def main():
                             if ingest_docs(uploaded_docs,chroma_client,st.session_state.collectionName,openai_ef):
                                 st.session_state.collection = chroma_client.get_collection(st.session_state.collectionName,openai_ef)
                                 st.write(f'document upload complete..')
+                                logger.info(f'new documents uploaded by {st.session_state.username} in collection {st.session_state.collectionName}')
                             else:
                                 st.write(f'Error while uploading docs')
+                                logger.error(f'error while uploading new documents to the {st.session_state.collectionName}')
 
 if __name__ == '__main__':
     main()
