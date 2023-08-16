@@ -161,6 +161,7 @@ creds.yml
 app_old.py
 docs/
 unhashed_creds.txt
+src/logs/*.*
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
