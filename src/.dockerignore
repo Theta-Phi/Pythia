@@ -1,0 +1,7 @@
+.env
+__pycache__
+logs/
+static/credentials_example.yml
+docs/
+app_old.py
+

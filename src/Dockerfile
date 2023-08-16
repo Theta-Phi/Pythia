@@ -7,9 +7,13 @@ RUN apt-get install -y build-essential
 RUN apt-get install -y gcc
 
 
-# install python dependencies
+# copy the src folder to the ./app/ folder (copies all files expect those in .dockerignore)
 COPY ./ ./app/
+
+# go to the app folder
 WORKDIR /app/
+
+# install python dependencies
 RUN pip install -r requirements.txt
 
 # make a directory for logs
