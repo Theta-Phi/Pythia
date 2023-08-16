@@ -55,12 +55,6 @@ def get_chain_gpt(chroma_client,collection_name):
     )
 
     question_generator = LLMChain(llm=q_llm, prompt=condense_question_prompt)
-    # qa_chain = RetrievalQA.from_chain_type(
-    # llm=q_llm,
-    # retriever=vectorstore.as_retriever(search_type="mmr", search_kwargs={'k': 5, 'fetch_k': 50}),
-    # prompt=condense_question_prompt,
-    # return_source_documents=True
-    # )
 
     # chain for asking the question based on relevant docs
     llm = ChatOpenAI(
@@ -70,7 +64,6 @@ def get_chain_gpt(chroma_client,collection_name):
     )
 
     doc_chain = load_qa_chain(llm=llm, chain_type="stuff", prompt=QA_PROMPT)
-    # qa_doc_chain = load_qa_chain(llm=llm, chain_type="stuff",prompt=QA_PROMPT)
 
     # conversational chain
     conversational_chain = ConversationalRetrievalChain(
@@ -79,13 +72,5 @@ def get_chain_gpt(chroma_client,collection_name):
         question_generator=question_generator,
         memory=memory
     )
-    # chain_type_kwargs = {"prompt": QA_PROMPT}
-    # conversational_chain = RetrievalQAWithSourcesChain(
-    #     llm=llm,
-    #     retriever=vectorstore.as_retriever(),
-    #     combine_docs_chain=qa_doc_chain,
-    #     memory=memory,
-    #     return_source_documents=True
-    # )
 
     return conversational_chain
