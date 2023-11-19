@@ -1,6 +1,6 @@
 # Introduction
 
-Delphi is a helpful chatbot to assist with quering multiple documents in multiple collections. The AI uses openAI API with langchain. The system requires a ChromaDB server for the vectorstore.
+Pythia is a helpful chatbot to assist with quering multiple documents in multiple collections. The AI uses openAI API with langchain. The system requires a ChromaDB server for the vectorstore.
 
 The application uses the streamlit library for the forntend.
 
