@@ -1,7 +1,24 @@
 version: "3"
 
 services:
-    delphi:
+    server:
+        image: server
+        build:
+        context: ./chroma
+        dockerfile: Dockerfile
+        container_name: chromadb
+        restart: unless-stopped
+        volumes:
+            - ./chroma:/chroma
+            - index_data:/index_data
+        command: uvicorn chromadb.app:app --reload --workers 1 --host 0.0.0.0 --port 8000 --log-config log_config.yml
+        environment:
+            - IS_PERSISTENT=TRUE
+        ports:
+            - 8000:8000
+        networks:
+            - pythia_net
+    pythia:
         image: delphi:1.1.0
         build:
             context: ./src
@@ -11,7 +28,7 @@ services:
         ports:
             - 8091:8501
         networks:
-            - chroma_net
+            - pythia_net
         environment:
           - OPENAI_API_KEY=
           - CHROMA_ADDR=
@@ -20,6 +37,12 @@ services:
           - CREDENTIALS_FILE=
           - BOT_IMAGE=https://i.pinimg.com/originals/02/c5/a8/02c5a82909a225411008d772ee6b7d62.png
 networks:
-  chroma_net:
-    external: true
-    name: chroma_net
+  pythia_net:
+    driver: bridge
+    name: pythia_net
+
+volumes:
+  index_data:
+    driver: local
+  backups:
+    driver: local

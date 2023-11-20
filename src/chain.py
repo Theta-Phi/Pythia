@@ -51,7 +51,7 @@ def get_chain_gpt(chroma_client,collection_name):
     q_llm = OpenAI(
         temperature=0.1,
         model_name="gpt-3.5-turbo",
-        max_tokens=500,
+        max_tokens=1000,
     )
 
     question_generator = LLMChain(llm=q_llm, prompt=condense_question_prompt)
@@ -60,7 +60,7 @@ def get_chain_gpt(chroma_client,collection_name):
     llm = ChatOpenAI(
         model_name="gpt-3.5-turbo",
         temperature=0.5,
-        max_tokens=500,
+        max_tokens=1000,
     )
 
     doc_chain = load_qa_chain(llm=llm, chain_type="stuff", prompt=QA_PROMPT)
