@@ -1,6 +1,6 @@
 import logging
 
-LOG_FILE = "../logs/delphi.log"
+LOG_FILE = "../logs/pythia.log"
 LOG_LEVEL = logging.DEBUG
 
 ##########################################################################

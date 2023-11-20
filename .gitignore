@@ -158,10 +158,12 @@ delphi_credentials.yml
 /static/credentials.yml
 credentials copy.yml
 creds.yml
+credentials.yml
 app_old.py
 docs/
 unhashed_creds.txt
 src/logs/*.*
+*.code-workspace
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

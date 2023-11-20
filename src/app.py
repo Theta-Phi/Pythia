@@ -2,10 +2,12 @@ import os, shutil
 from datetime import datetime
 import streamlit as st
 import streamlit_authenticator as stauth
+from langchain.chat_models import ChatOpenAI
 import yaml
 from yaml.loader import SafeLoader
 from htmlTemplates import css, bot_template, user_template
 from dotenv import load_dotenv
+import tiktoken
 
 from ingest import ingest_docs
 from chain import get_chain_gpt
@@ -14,6 +16,26 @@ import chromadb
 from chromadb.utils import embedding_functions
 
 from logger import logger
+
+def num_tokens_from_messages(messages, model="gpt-3.5-turbo"):
+    """Return the number of tokens used by a list of messages."""
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        print("Warning: model not found. Using cl100k_base encoding.")
+        encoding = tiktoken.get_encoding("cl100k_base")
+    tokens_per_message = 3
+    tokens_per_name = 1
+    num_tokens = 0
+    for message in messages:
+        num_tokens += tokens_per_message
+        for value in message.content:
+            num_tokens += len(encoding.encode(value))
+            # if key == "name":
+            #     num_tokens += tokens_per_name
+    num_tokens += 3  # every reply is primed with <|start|>assistant<|message|>
+    return num_tokens
+
 
 def reset_chat(chroma_client):
     st.session_state.available_collections = []
@@ -24,7 +46,7 @@ def reset_chat(chroma_client):
     logger.info(f'chat reset')
 
 
-def update_chroma_collections(chroma_client):
+def update_chroma_collections(chroma_client:chromadb.HttpClient):
     chroma_collections = chroma_client.list_collections()
     available_collections=['']
     for collection in chroma_collections:
@@ -52,6 +74,10 @@ def handle_question(user_question):
     bot_image = os.getenv('BOT_IMAGE')
     convesational_chain = st.session_state.conversation
     chat_history = st.session_state.chat_history
+    tokens = num_tokens_from_messages(chat_history)
+    while tokens > 3500:
+        chat_history.pop(0)
+        tokens = num_tokens_from_messages(chat_history)
     # send the query to the conversational chain
     response = convesational_chain({"question": user_question,"chat_history": chat_history})
     
@@ -86,8 +112,7 @@ def main():
     chroma_port=os.getenv('CHROMA_PORT')
     openai_key = os.getenv('OPENAI_API_KEY')
     app_name=os.getenv('APP_NAME')
-    credentials_filename = os.getenv('CREDENTIALS_FILE')
-    # collection_name = os.getenv('COLLECTION_NAME')
+    credentials_filename = 'credentials.yml'
 
     # #create embeddings function for chromadb
     openai_ef = embedding_functions.OpenAIEmbeddingFunction(
@@ -96,7 +121,10 @@ def main():
             )
     
     #initialise chroma client with presistent store and get the available collections
-    chroma_client = chromadb.HttpClient(host=chroma_address, port=chroma_port)
+    try:
+        chroma_client = chromadb.HttpClient(host=chroma_address, port=chroma_port)
+    except Exception as e:
+        logger.error(f'error: failed to initialise chromadb client {e}')
 
     #initialise session object
     if "conversation" not in st.session_state:
@@ -144,7 +172,6 @@ def main():
         st.write(f'Welcome *{name}*')
         st.session_state.username = username
         st.session_state.user_avater = "https://e7.pngegg.com/pngimages/799/987/png-clipart-computer-icons-avatar-icon-design-avatar-heroes-computer-wallpaper-thumbnail.png"
-        #st.session_state.user_avater = credentials['credentials']['usernames'][username]['avatar']
         logger.info(f'new log in: {st.session_state.username}')
         
         if st.session_state.collectionName != ''and st.session_state.conversation is not None:

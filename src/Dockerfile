@@ -19,5 +19,10 @@ RUN pip install -r requirements.txt
 # make a directory for logs
 RUN mkdir -p ../logs
 
+WORKDIR /app/static/
+RUN python gen_pwd.py credentials.yml
+
+WORKDIR /app/
+
 # build executable
 CMD ["streamlit", "run","app.py"]
