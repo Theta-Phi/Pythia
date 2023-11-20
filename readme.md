@@ -16,13 +16,9 @@ The passwords are hashed as part of the image build process so readable password
 
 ### Deploy
 
-The fastest way to deploy is to use the packaged docker compose file. Update the following environment variables:
+The fastest way to deploy is to use the packaged docker compose file. Enter you API Key for OpenAI in the environment variables:
 
           - OPENAI_API_KEY= <YOUR OPEN API KEY>
-          - CHROMA_ADDR= <IP ADDRESS FOR THE CHROMADB SERVER>
-          - CHROMA_PORT= <PORT FOR THE CHROMADB SERVER>
-          - APP_NAME= <APP NAME>
-          - BOT_IMAGE= <PATH FOR THE AVATAR IMAGE TO BE USED NEEDS TO BE WEB ADDRESS - OR LEAVE TO DEFAULT>
 
 ### Under the hood
 
